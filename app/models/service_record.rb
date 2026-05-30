@@ -1,4 +1,6 @@
 class ServiceRecord < ApplicationRecord
+  before_validation :set_default_status
+
   belongs_to :vehicle
   belongs_to :service_type
 
@@ -16,4 +18,10 @@ class ServiceRecord < ApplicationRecord
 
   validates :status, presence: true,
                      inclusion: { in: %w[scheduled in_progress completed] }
+
+  private
+
+  def set_default_status
+    self.status ||= "scheduled"
+  end
 end

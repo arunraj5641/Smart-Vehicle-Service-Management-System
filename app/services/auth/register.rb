@@ -1,5 +1,5 @@
-module ServiceRecords
-  class Create
+module Auth
+  class Register
     def self.call(attributes:)
       new(attributes:).call
     end
@@ -9,7 +9,12 @@ module ServiceRecords
     end
 
     def call
-      ServiceRecord.create!(attributes)
+      user = User.create!(attributes)
+
+      {
+        user: user.as_json(except: [:password_digest]),
+        token: JsonWebToken.encode(user_id: user.id)
+      }
     end
 
     private
