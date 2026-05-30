@@ -4,25 +4,20 @@ Rails.application.routes.draw do
       # Authentication Routes
       post "auth/login", to: "auth#login"
       post "auth/register", to: "auth#register"
+      post "auth/logout", to: "auth#logout"
+      get "me", to: "users#me"
 
-      resources :users, only: [:create, :show]
+      resources :users, only: [:index, :create, :show]
 
-      post "auth/register", to: "auth#register"
-      post "auth/login", to: "auth#login"
+      resources :vehicles, only: [:create, :index, :show, :update, :destroy]
 
-      resources :vehicles, only: [:create, :index, :show, :update]
-
-      resources :service_types, only: [:index, :create, :show, :update]
+      resources :service_types, only: [:index, :create, :show, :update, :destroy]
 
       resources :service_records, only: [:create, :index, :show, :update] do
         member do
           patch :status, to: "service_records#status_update"
         end
       end
-
-      patch "service_records/:id", to: "service_records#update"
-      patch "service_records/:id/status", to: "service_records#status"
-
       namespace :analytics do
         get :vehicle_costs
         get :monthly_costs

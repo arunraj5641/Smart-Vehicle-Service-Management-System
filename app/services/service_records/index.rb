@@ -18,6 +18,7 @@ module ServiceRecords
       scope = scope.where(status: filters[:status]) if filters[:status].present?
       scope = scope.where(serviced_by: filters[:serviced_by]) if filters[:serviced_by].present?
       scope = scope.joins(:vehicle).where(vehicles: { user_id: filters[:user_id] }) if filters[:user_id].present?
+      scope = scope.joins(:service_type).where(service_types: { service_centre_id: filters[:service_centre_id] }) if filters[:service_centre_id].present?
 
       scope
     end

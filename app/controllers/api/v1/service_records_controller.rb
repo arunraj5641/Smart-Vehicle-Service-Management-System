@@ -1,13 +1,15 @@
 module Api
   module V1
     class ServiceRecordsController < ApplicationController
-      before_action :set_service_record, only: [:update, :status]
       before_action :authenticate_user!
       before_action :set_service_record, only: [:show, :update, :status_update]
+      before_action :require_service_centre!, only: [:create, :update, :status_update]
+      before_action :authorize_service_record_owner!, only: [:update, :status_update]
 
       def index
         filters = index_filters
-        filters[:user_id] = current_user.id unless ["admin", "service_centre"].include?(current_user.role)
+        filters[:user_id] = current_user.id if current_user.role == "user"
+        filters[:service_centre_id] = current_user.id if current_user.role == "service_centre"
 
         service_records = ServiceRecords::Index.call(filters: filters)
         service_records, meta = paginate(service_records)
@@ -22,14 +24,12 @@ module Api
 
       def create
         vehicle = Vehicle.find(service_record_params[:vehicle_id])
-        return render_error(
-          message: "You can only create service records for your own vehicles",
-          status: :forbidden,
-          errors: { vehicle_id: ["is not owned by you"] }
-        ) unless ["admin", "service_centre"].include?(current_user.role) || vehicle.user_id == current_user.id
+        service_type = ServiceType.find(service_record_params[:service_type_id])
+        return unless authorize_service_type!(service_type)
 
         attributes = service_record_params.to_h.symbolize_keys
-        attributes[:serviced_by] ||= current_user.id if ["admin", "service_centre"].include?(current_user.role)
+        attributes[:serviced_by] = current_user.id if current_user.role == "service_centre"
+        attributes[:serviced_by] ||= current_user.id if current_user.role == "admin"
 
         service_record = ServiceRecords::Create.call(attributes: attributes)
 
@@ -46,7 +46,7 @@ module Api
           message: "You are not authorized to view this service record",
           status: :forbidden,
           errors: { role: ["is not permitted"] }
-        ) unless ["admin", "service_centre"].include?(current_user.role) || @service_record.vehicle.user_id == current_user.id
+        ) unless can_view_service_record?(@service_record)
 
         render_success(
           data: @service_record,
@@ -61,9 +61,13 @@ module Api
           errors: { role: ["is not permitted"] }
         ) unless ["admin", "service_centre"].include?(current_user.role) || @service_record.vehicle.user_id == current_user.id
 
+        attributes = service_record_params.to_h.symbolize_keys
+        return if attributes[:service_type_id].present? && !authorize_service_type!(ServiceType.find(attributes[:service_type_id]))
+        attributes[:serviced_by] = current_user.id if current_user.role == "service_centre"
+
         service_record = ServiceRecords::Update.call(
-          id: params[:id],
-          attributes: service_record_params.to_h.symbolize_keys
+          service_record: @service_record,
+          attributes: attributes
         )
 
         render_success(
@@ -74,15 +78,15 @@ module Api
       end
 
       def status_update
+        status = requested_status
         return render_error(
-          message: "You are not authorized to update the status of this service record",
-          status: :forbidden,
-          errors: { role: ["is not permitted"] }
-        ) unless ["admin", "service_centre"].include?(current_user.role) || @service_record.vehicle.user_id == current_user.id
+          message: "Missing required parameter",
+          status: :bad_request,
+          errors: { status: ["is required"] }
+        ) if status.blank?
 
-        status = params.require(:status)
-        service_record = ServiceRecords::StatusUpdate.call(
-          id: params[:id],
+        service_record = ServiceRecords::UpdateStatus.call(
+          service_record: @service_record,
           status: status
         )
 
@@ -90,30 +94,6 @@ module Api
           data: service_record,
           message: "Service record status updated successfully",
           meta: { permissions: permissions_for(:service_record, service_record) }
-        )
-      end
-
-      def update
-        service_record = ServiceRecords::Update.call(
-          service_record: @service_record,
-          attributes: service_record_params.to_h.symbolize_keys
-        )
-
-        render_success(
-          data: service_record,
-          message: "Service record updated successfully"
-        )
-      end
-
-      def status
-        service_record = ServiceRecords::UpdateStatus.call(
-          service_record: @service_record,
-          status: status_params[:status]
-        )
-
-        render_success(
-          data: service_record,
-          message: "Service record status updated successfully"
         )
       end
 
@@ -137,13 +117,41 @@ module Api
           :next_service_date,
           :vehicle_id,
           :service_type_id,
-          :serviced_by,
           :status
         )
       end
 
-      def status_params
-        params.require(:service_record).permit(:status)
+      def requested_status
+        params[:status].presence || params.dig(:service_record, :status).presence
+      end
+
+      def authorize_service_record_owner!
+        return if current_user.role == "admin"
+        return if @service_record.service_type.service_centre_id == current_user.id
+
+        render_error(
+          message: "You are not authorized to update this service record",
+          status: :forbidden,
+          errors: { role: ["is not permitted"] }
+        )
+      end
+
+      def authorize_service_type!(service_type)
+        return true if current_user.role == "admin" || service_type.service_centre_id == current_user.id
+
+        render_error(
+          message: "Service type does not belong to this service centre",
+          status: :unprocessable_entity,
+          errors: { service_type_id: ["does not belong to this service centre"] }
+        )
+        false
+      end
+
+      def can_view_service_record?(service_record)
+        return true if current_user.role == "admin"
+        return true if current_user.role == "service_centre" && service_record.service_type.service_centre_id == current_user.id
+
+        service_record.vehicle.user_id == current_user.id
       end
     end
   end

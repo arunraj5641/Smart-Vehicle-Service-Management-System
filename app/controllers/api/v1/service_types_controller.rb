@@ -2,11 +2,20 @@ module Api
   module V1
     class ServiceTypesController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_service_type, only: [:show, :update]
-      before_action :require_service_centre!, only: [:create, :update]
+      before_action :set_service_type, only: [:show, :update, :destroy]
+      before_action :require_service_centre!, only: [:create, :update, :destroy]
+      before_action :authorize_service_type_owner!, only: [:update, :destroy]
 
       def create
-        service_type = ServiceType.create!(service_type_params)
+        return render_error(
+          message: "Only service centres can create service types",
+          status: :forbidden,
+          errors: { role: ["must be service_centre"] }
+        ) unless current_user.role == "service_centre"
+
+        service_type = ServiceType.new(service_type_params)
+        service_type.service_centre = current_user
+        service_type.save!
 
         render_success(
           data: service_type,
@@ -44,6 +53,16 @@ module Api
         )
       end
 
+      def destroy
+        @service_type.destroy!
+
+        render_success(
+          data: {},
+          message: "Service type deleted successfully",
+          meta: { permissions: permissions_for(:service_type) }
+        )
+      end
+
       private
 
       def set_service_type
@@ -54,6 +73,16 @@ module Api
         params.require(:service_type).permit(
           :name,
           :recommended_days
+        )
+      end
+
+      def authorize_service_type_owner!
+        return if current_user.role == "admin" || @service_type.service_centre_id == current_user.id
+
+        render_error(
+          message: "You are not authorized to manage this service type",
+          status: :forbidden,
+          errors: { role: ["is not permitted"] }
         )
       end
     end

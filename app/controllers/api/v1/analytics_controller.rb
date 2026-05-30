@@ -40,7 +40,7 @@ module Api
         user_id = params[:user_id].presence || current_user&.id
         return render_error(message: "user_id is required", status: :unprocessable_entity) if user_id.blank?
 
-        @user = User.find(Integer(user_id, 10))
+        @user = User.find(Integer(user_id.to_s, 10))
       rescue ArgumentError
         render_error(message: "user_id must be a valid integer", status: :unprocessable_entity)
       end

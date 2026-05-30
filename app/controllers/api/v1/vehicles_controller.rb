@@ -2,7 +2,7 @@ module Api
   module V1
     class VehiclesController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_vehicle, only: [:show, :update]
+      before_action :set_vehicle, only: [:show, :update, :destroy]
 
       def create
         resolved_user_id = current_user.id
@@ -49,14 +49,30 @@ module Api
           message: "You are not authorized to update this vehicle",
           status: :forbidden,
           errors: { role: ["is not permitted"] }
-        ) unless ["admin", "service_centre"].include?(current_user.role) || @vehicle.user_id == current_user.id
+        ) unless can_manage_vehicle?(@vehicle)
 
-        @vehicle.update!(vehicle_params)
+        @vehicle.update!(vehicle_update_params)
 
         render_success(
           data: @vehicle,
           message: "Vehicle updated successfully",
           meta: { permissions: permissions_for(:vehicle, @vehicle) }
+        )
+      end
+
+      def destroy
+        return render_error(
+          message: "You are not authorized to delete this vehicle",
+          status: :forbidden,
+          errors: { role: ["is not permitted"] }
+        ) unless can_manage_vehicle?(@vehicle)
+
+        @vehicle.destroy!
+
+        render_success(
+          data: {},
+          message: "Vehicle deleted successfully",
+          meta: { permissions: permissions_for(:vehicle) }
         )
       end
 
@@ -73,6 +89,18 @@ module Api
           :number_plate,
           :user_id
         )
+      end
+
+      def vehicle_update_params
+        params.require(:vehicle).permit(
+          :name,
+          :model,
+          :number_plate
+        )
+      end
+
+      def can_manage_vehicle?(vehicle)
+        current_user.role == "admin" || vehicle.user_id == current_user.id
       end
     end
   end

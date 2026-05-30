@@ -1,8 +1,17 @@
 module Api
   module V1
     class AuthController < ApplicationController
+      before_action :authenticate_user!, only: [:logout]
+
       def register
-        result = Auth::Register.call(attributes: register_params.to_h.symbolize_keys)
+        attributes = register_params.to_h.symbolize_keys
+        return render_error(
+          message: "Admin registration is not allowed",
+          status: :forbidden,
+          errors: { role: ["cannot be admin"] }
+        ) if attributes[:role].to_s == "admin"
+
+        result = Auth::Register.call(attributes: attributes)
 
         render_success(
           data: result,
@@ -20,6 +29,13 @@ module Api
         return render_error(message: "Invalid email or password", status: :unauthorized) unless result
 
         render_success(data: result, message: "Login successful")
+      end
+
+      def logout
+        render_success(
+          data: {},
+          message: "Logout successful"
+        )
       end
 
       private

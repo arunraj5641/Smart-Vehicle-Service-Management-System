@@ -11,7 +11,8 @@ module Analytics
     end
 
     def call
-      ActiveRecord::Base.connection.exec_query(SQL, "SQL", [[nil, user_id]]).to_a
+      sql = ActiveRecord::Base.sanitize_sql_array(["SELECT * FROM get_monthly_costs(?)", user_id])
+      ActiveRecord::Base.connection.exec_query(sql).to_a
     end
 
     private

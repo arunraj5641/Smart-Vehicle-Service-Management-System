@@ -15,6 +15,7 @@ module ResponseHandler
     render json: {
       success: false,
       message: message,
+      data: {},
       errors: errors || {},
       meta: { request_id: request.uuid },
       timestamp: Time.current.iso8601

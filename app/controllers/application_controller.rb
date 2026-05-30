@@ -4,11 +4,11 @@ class ApplicationController < ActionController::API
 
   attr_reader :current_user
 
+  rescue_from StandardError, with: :handle_internal_error
   rescue_from ActiveRecord::RecordNotFound, with: :handle_not_found
   rescue_from ActionController::ParameterMissing, with: :handle_parameter_missing
   rescue_from ActiveRecord::NotNullViolation, with: :handle_db_error
   rescue_from ActiveRecord::RecordInvalid, with: :handle_validation_error
-  rescue_from StandardError, with: :handle_internal_error
 
   # Accessors
   def current_user
@@ -163,7 +163,7 @@ end
     render_error(
       message: "Database integrity violation",
       status: :unprocessable_entity,
-      errors: { database: [error.message.split("\n").first] }
+      errors: { database: ["violates database constraints"] }
     )
   end
 
@@ -174,7 +174,7 @@ end
     render_error(
       message: "An internal server error occurred",
       status: :internal_server_error,
-      errors: { server: [error.message] }
+      errors: { server: ["unexpected error"] }
     )
   end
 end
